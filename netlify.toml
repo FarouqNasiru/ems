@@ -1,0 +1,13 @@
+# Build command
+command = "sh .netlify/build.sh"
+
+# Directory where the built app will be
+publish = "build/web"
+
+[build.environment]
+  FLUTTER_VERSION = "stable"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
