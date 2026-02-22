@@ -30,12 +30,28 @@ import 'package:ems/screens/admin_weekly_reports_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
-  await dotenv.load(fileName: ".env");
+  // Load environment variables for local dev (desktop/mobile)
+  // On Web, we mostly rely on --dart-define for production stability
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint("Dotenv load failed (Expected on web if not using .env): $e");
+  }
+
+  // Use String.fromEnvironment for Web/CI; fallback to dotenv for local
+  final apiKey = const String.fromEnvironment('FIREBASE_API_KEY').isNotEmpty
+      ? const String.fromEnvironment('FIREBASE_API_KEY')
+      : dotenv.env['FIREBASE_API_KEY'] ?? '';
+
+  if (apiKey.isEmpty && kIsWeb) {
+    debugPrint(
+      "WARNING: Firebase API Key is empty! Initialize will likely fail.",
+    );
+  }
 
   await Firebase.initializeApp(
     options: FirebaseOptions(
-      apiKey: dotenv.env['FIREBASE_API_KEY'] ?? '', // Load from env
+      apiKey: apiKey,
       appId: "1:188575575343:web:87b2a91665994c9f3805da",
       messagingSenderId: "188575575343",
       projectId: "nexxgenva-2d149",

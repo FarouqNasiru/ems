@@ -9,5 +9,5 @@ export PATH="$PATH:`pwd`/flutter/bin"
 # 2. Recreate .env file from Netlify Environment Variables
 echo "FIREBASE_API_KEY=$FIREBASE_API_KEY" > .env
 
-# 3. Build Web
-flutter build web --release
+# 3. Build Web with API Key injection
+flutter build web --release --dart-define=FIREBASE_API_KEY=$FIREBASE_API_KEY
