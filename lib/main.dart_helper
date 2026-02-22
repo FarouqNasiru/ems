@@ -1,0 +1,26 @@
+
+  Widget _buildSidebarItem({
+    required IconData icon,
+    required IconData selectedIcon,
+    required String label,
+    required int index,
+  }) {
+    final isSelected = _selectedIndex == index;
+    return ListTile(
+      leading: Icon(
+        isSelected ? selectedIcon : icon,
+        color: isSelected ? Colors.indigo : Colors.grey[700],
+      ),
+      title: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.indigo : Colors.grey[700],
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      selected: isSelected,
+      onTap: () => setState(() => _selectedIndex = index),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    );
+  }

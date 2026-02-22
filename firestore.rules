@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      // Check if the user document has role == 'admin'
+      // Note: correct path to user doc
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper to check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Users collection
+    // Allow users to read/write their own profile
+    // Allow admins to read all profiles
+    match /users/{userId} {
+      allow read: if isAuth() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAuth() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Logs collection
+    // Path matches the structure used in the app
+    match /artifacts/{appId}/public/data/daily_reports/{reportId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /artifacts/{appId}/public/data/logs/{logId} {
+      
+      // READ: Allow if user owns the log, is admin, OR log is active (for Extension)
+      allow read: if isAuth() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin() || 
+        resource.data.status == 'active'
+      );
+      
+      // CREATE: Allow if user is authenticated and sets userId to their own uid
+      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
+      
+      // UPDATE: Allow if user owns the log, is admin, OR log is active (for Extension heartbeat/stop)
+      allow update: if isAuth() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin() || 
+        resource.data.status == 'active'
+      );
+      
+      // DELETE: Allow if user owns the log OR is admin
+      allow delete: if isAuth() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Screenshots subcollection
+      match /screenshots/{screenshotId} {
+        // Allow read/write if parent log is owned by user OR user is admin
+        allow read: if isAuth() && (
+          get(/databases/$(database)/documents/artifacts/$(appId)/public/data/logs/$(logId)).data.userId == request.auth.uid
+          || isAdmin()
+        );
+
+        allow create: if isAuth(); // Allow extension to add screenshots
+        
+        allow update, delete: if isAuth() && (
+           get(/databases/$(database)/documents/artifacts/$(appId)/public/data/logs/$(logId)).data.userId == request.auth.uid
+           || isAdmin()
+        );
+      }
+    }
+
+    // Weekly Summaries collection
+    match /artifacts/{appId}/public/data/weekly_summaries/{summaryId} {
+      allow read: if isAuth() && (
+        (resource == null) || 
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
+      allow create: if isAuth() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update, delete: if isAuth() && isAdmin();
+    }
+  }
+}

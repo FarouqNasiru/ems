@@ -1,0 +1,40 @@
+{
+	"manifest_version": 3,
+	"name": "WorkLog Pro Monitor",
+	"version": "1.6",
+	"description": "Automatically tracks work sessions and idle time.",
+	"permissions": [
+		"tabs",
+		"idle",
+		"storage",
+		"alarms"
+	],
+	"host_permissions": [
+		"https://*.firebaseio.com/*",
+		"https://*.googleapis.com/*",
+		"https://www.google.com/*",
+		"<all_urls>"
+	],
+	"externally_connectable": {
+		"matches": [
+			"http://localhost/*",
+			"http://localhost:57152/"
+		]
+	},
+	"background": {
+		"service_worker": "background.js"
+	},
+	"content_scripts": [
+		{
+			"matches": [
+				"<all_urls>"
+			],
+			"js": [
+				"content.js"
+			]
+		}
+	],
+	"action": {
+		"default_title": "WorkLog Pro Status"
+	}
+}
