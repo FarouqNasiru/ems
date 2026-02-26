@@ -1124,13 +1124,23 @@ class AdminLiveFeed extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: isActive
                                   ? Colors.green.withValues(alpha: 0.1)
-                                  : Colors.grey.withValues(alpha: 0.1),
+                                  : (log['status'] == 'idle_stopped'
+                                        ? Colors.orange.withValues(alpha: 0.1)
+                                        : Colors.grey.withValues(alpha: 0.1)),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              isActive ? "ONLINE" : "Done",
+                              isActive
+                                  ? "ONLINE"
+                                  : (log['status'] == 'idle_stopped'
+                                        ? "PAUSED"
+                                        : "Done"),
                               style: TextStyle(
-                                color: isActive ? Colors.green : Colors.grey,
+                                color: isActive
+                                    ? Colors.green
+                                    : (log['status'] == 'idle_stopped'
+                                          ? Colors.orange
+                                          : Colors.grey),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
                               ),
