@@ -340,15 +340,13 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
                               final isAdmin = snap.data == 'admin';
                               return Column(
                                 children: [
-                                  if (!isAdmin) ...[
-                                    const SizedBox(height: 8),
-                                    _buildSidebarItem(
-                                      icon: Icons.assignment_outlined,
-                                      selectedIcon: Icons.assignment,
-                                      label: "Daily Report",
-                                      index: 3,
-                                    ),
-                                  ],
+                                  const SizedBox(height: 8),
+                                  _buildSidebarItem(
+                                    icon: Icons.assignment_outlined,
+                                    selectedIcon: Icons.assignment,
+                                    label: "Daily Report",
+                                    index: 3,
+                                  ),
                                   if (isAdmin) ...[
                                     const SizedBox(height: 8),
                                     _buildSidebarItem(
