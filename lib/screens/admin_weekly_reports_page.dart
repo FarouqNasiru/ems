@@ -77,7 +77,7 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
       final endDate = weeklyReport.date;
       final startDate = endDate.subtract(const Duration(days: 6));
 
-      // 2. Fetch ALL daily reports for this user in that range
+      // 2. Fetch all reports for this user (we filter dates in-memory to avoid composite index requirement)
       final snap = await FirebaseFirestore.instance
           .collection('artifacts')
           .doc(widget.appId)
@@ -85,12 +85,19 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
           .doc('data')
           .collection('daily_reports')
           .where('userId', isEqualTo: weeklyReport.userId)
-          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
           .get();
 
       final reports =
-          snap.docs.map((d) => DailyReport.fromMap(d.id, d.data())).toList()
+          snap.docs.map((d) => DailyReport.fromMap(d.id, d.data())).where((r) {
+              // Filter for reports within the 7-day window ending on endDate
+              // We use a small buffer or inclusive checks to ensure accuracy
+              return (r.date.isAfter(
+                        startDate.subtract(const Duration(seconds: 1)),
+                      ) ||
+                      r.date.isAtSameMomentAs(startDate)) &&
+                  (r.date.isBefore(endDate.add(const Duration(seconds: 1))) ||
+                      r.date.isAtSameMomentAs(endDate));
+            }).toList()
             ..sort((a, b) => a.date.compareTo(b.date)); // Chronological order
 
       // 3. Generate aggregated CSV
