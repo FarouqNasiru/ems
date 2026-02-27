@@ -1,13 +1,11 @@
-```
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // For Clipboard
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:file_picker/file_picker.dart';
 import '../models/daily_report.dart';
 
 // Pill colours reused from the daily report page palette
@@ -52,19 +50,18 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
           .where('isWeeklySubmission', isEqualTo: true)
           .get();
 
-      final fetchedReports = snap.docs
-          .map((d) => DailyReport.fromMap(d.id, d.data()))
-          .toList()
-        ..sort((a, b) => b.date.compareTo(a.date));
+      final fetchedReports =
+          snap.docs.map((d) => DailyReport.fromMap(d.id, d.data())).toList()
+            ..sort((a, b) => b.date.compareTo(a.date));
 
       setState(() {
         _reports = fetchedReports;
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading reports: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading reports: $e')));
       }
     } finally {
       setState(() => _loadingReports = false);
@@ -74,57 +71,90 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
   void _downloadCSV(DailyReport report) async {
     try {
       final csvData = const ListToCsvConverter().convert(report.toCsvRows());
-      final fileName = 'Weekly_Report_${report.userName}_${DateFormat('yyyy-MM-dd').format(report.date)}.csv';
+      final fileName =
+          'Weekly_Report_${report.userName}_${DateFormat('yyyy-MM-dd').format(report.date)}.csv';
 
-      if (kIsWeb) {
-        // Use url_launcher to trigger download via data URI for Web
-        final encodedUri = Uri.dataFromString(
-          csvData,
-          mimeType: 'text/csv',
-          encoding: utf8,
-        );
-
-        if (await canLaunchUrl(encodedUri)) {
-          await launchUrl(encodedUri);
-        } else {
-          throw 'Could not launch $encodedUri';
-        }
-      } else {
-        // Desktop/Mobile: Use FilePicker to save natively
-        final String? outputFile = await FilePicker.platform.saveFile(
-          dialogTitle: 'Save Weekly Report CSV',
-          fileName: fileName,
-          type: FileType.custom,
-          allowedExtensions: ['csv'],
-          bytes: utf8.encode(csvData),
-        );
-
-        if (outputFile != null) {
-          // FilePicker with bytes handles saving on most platforms directly.
-          // On Windows, if outputFile is a path, we might need writeAsBytes if bytes param wasn't enough,
-          // but usually 'bytes' parameter in saveFile (for Web/Mobile) and its counterparts work.
-          // For Windows, saveFile returns the path. If bytes were provided, it usually writes them.
-          // Just in case or if bytes param is only for certain platforms:
-          final file = File(outputFile);
-          await file.writeAsBytes(utf8.encode(csvData));
-        } else {
-          // User cancelled
-          return;
-        }
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Report saved successfully.')),
-        );
-      }
+      _showCsvDialog(csvData, fileName);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error generating CSV: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error generating CSV: $e')));
       }
     }
+  }
+
+  void _showCsvDialog(String csv, String filename) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Export: $filename'),
+        content: SizedBox(
+          width: 500,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                kIsWeb
+                    ? 'You can copy the raw data or trigger a direct download.'
+                    : 'Use "Copy" to grab the data (Direct download is Web-only).',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                height: 150,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    csv,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: csv));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Copied to clipboard!')),
+              );
+            },
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Copy'),
+          ),
+          if (kIsWeb)
+            ElevatedButton.icon(
+              onPressed: () async {
+                final encodedUri = Uri.dataFromString(
+                  csv,
+                  mimeType: 'text/csv',
+                  encoding: utf8,
+                );
+                if (await canLaunchUrl(encodedUri)) {
+                  await launchUrl(encodedUri);
+                }
+              },
+              icon: const Icon(Icons.download, size: 16),
+              label: const Text('Download'),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
