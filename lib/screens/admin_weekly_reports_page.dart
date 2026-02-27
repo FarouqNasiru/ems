@@ -115,6 +115,7 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
                     style: const TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 11,
+                      color: Colors.black,
                     ),
                   ),
                 ),
@@ -123,16 +124,13 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
-          ),
-          ElevatedButton.icon(
+          TextButton.icon(
             onPressed: () {
               Clipboard.setData(ClipboardData(text: csv));
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Copied to clipboard!')),
               );
+              Navigator.pop(ctx);
             },
             icon: const Icon(Icons.copy, size: 16),
             label: const Text('Copy'),
@@ -140,18 +138,32 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
           if (kIsWeb)
             ElevatedButton.icon(
               onPressed: () async {
-                final encodedUri = Uri.dataFromString(
-                  csv,
-                  mimeType: 'text/csv',
-                  encoding: utf8,
-                );
-                if (await canLaunchUrl(encodedUri)) {
-                  await launchUrl(encodedUri);
+                final encoded = Uri.encodeComponent(csv);
+                final url = 'data:text/csv;charset=utf-8,$encoded';
+                try {
+                  await launchUrl(
+                    Uri.parse(url),
+                    webOnlyWindowName: '_self',
+                    mode: LaunchMode.externalApplication,
+                  );
+                  Navigator.pop(ctx);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Could not trigger download. Please use "Copy".',
+                      ),
+                    ),
+                  );
                 }
               },
               icon: const Icon(Icons.download, size: 16),
-              label: const Text('Download'),
+              label: const Text('Download File'),
             ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
         ],
       ),
     );
