@@ -204,7 +204,7 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
           w.siteName,
           w.mailedThisWeek,
           w.newMembersThisWeek,
-          w.subscribedMembersThisWeek,
+          w.subscribedMembers,
         ]);
       }
     }
