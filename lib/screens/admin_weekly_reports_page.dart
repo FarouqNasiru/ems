@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For Clipboard
@@ -68,20 +67,187 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
     }
   }
 
-  void _downloadCSV(DailyReport report) async {
+  void _downloadCSV(DailyReport weeklyReport) async {
+    setState(() {
+      _loadingReports = true;
+    });
+
     try {
-      final csvData = const ListToCsvConverter().convert(report.toCsvRows());
+      // 1. Determine the week range (7 days ending on the report date)
+      final endDate = weeklyReport.date;
+      final startDate = endDate.subtract(const Duration(days: 6));
+
+      // 2. Fetch ALL daily reports for this user in that range
+      final snap = await FirebaseFirestore.instance
+          .collection('artifacts')
+          .doc(widget.appId)
+          .collection('public')
+          .doc('data')
+          .collection('daily_reports')
+          .where('userId', isEqualTo: weeklyReport.userId)
+          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
+          .get();
+
+      final reports =
+          snap.docs.map((d) => DailyReport.fromMap(d.id, d.data())).toList()
+            ..sort((a, b) => a.date.compareTo(b.date)); // Chronological order
+
+      // 3. Generate aggregated CSV
+      final csvData = _generateFullWeeklyCsv(reports, weeklyReport);
       final fileName =
-          'Weekly_Report_${report.userName}_${DateFormat('yyyy-MM-dd').format(report.date)}.csv';
+          'Weekly_Report_${weeklyReport.userName}_${DateFormat('yyyy-MM-dd').format(weeklyReport.date)}.csv';
 
       _showCsvDialog(csvData, fileName);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error generating CSV: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating aggregated CSV: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingReports = false);
+    }
+  }
+
+  String _generateFullWeeklyCsv(
+    List<DailyReport> reports,
+    DailyReport summaryReport,
+  ) {
+    final List<List<dynamic>> rows = [];
+    final df = DateFormat('yyyy-MM-dd');
+
+    // Header
+    rows.add(['FULL WEEKLY ACTIVITY REPORT']);
+    rows.add(['Employee', summaryReport.userName]);
+    rows.add(['Week Ending', df.format(summaryReport.date)]);
+    rows.add(['Reports Included', reports.length.toString()]);
+    rows.add([]);
+
+    // Viral Mailers
+    rows.add(['SECTION: Viral Mailers']);
+    rows.add([
+      'Date',
+      'Name',
+      'Site Name',
+      'Sent To',
+      'Clicks',
+      'CTR',
+      'Emails Clicked',
+      'Frequency',
+    ]);
+    for (var r in reports) {
+      for (var m in r.viralMailers) {
+        rows.add([
+          df.format(r.date),
+          m.name,
+          m.siteName,
+          m.sentTo,
+          m.clicks,
+          m.ctr,
+          m.emailsClicked,
+          m.frequency,
+        ]);
       }
     }
+    rows.add([]);
+
+    // Traffic Exchanges
+    rows.add(['SECTION: Traffic Exchanges']);
+    rows.add(['Date', 'Name', 'URL', 'Hits', 'Surf Count']);
+    for (var r in reports) {
+      for (var t in r.trafficExchanges) {
+        rows.add([df.format(r.date), t.name, t.url, t.hits, t.surfCount]);
+      }
+    }
+    rows.add([]);
+
+    // Social Media
+    rows.add(['SECTION: Social Media']);
+    rows.add(['Date', 'Name', 'Post Link']);
+    for (var r in reports) {
+      for (var s in r.socialMedia) {
+        rows.add([df.format(r.date), s.name, s.postLink]);
+      }
+    }
+    rows.add([]);
+
+    // Tracking Links
+    rows.add(['SECTION: Tracking Links']);
+    rows.add(['Date', 'URL', 'Total Hits', 'Top 3 Countries', 'Top 3 Sites']);
+    for (var r in reports) {
+      for (var l in r.trackingLinks) {
+        rows.add([
+          df.format(r.date),
+          l.url,
+          l.totalHits,
+          l.top3Countries,
+          l.top3Sites,
+        ]);
+      }
+    }
+    rows.add([]);
+
+    // Weekly Mailer Stats
+    rows.add(['SECTION: Weekly Mailer Stats']);
+    rows.add([
+      'Date',
+      'Site Name',
+      'Mailed This Week',
+      'New Members',
+      'Subscribed Members',
+    ]);
+    for (var r in reports) {
+      for (var w in r.weeklyMailers) {
+        rows.add([
+          df.format(r.date),
+          w.siteName,
+          w.mailedThisWeek,
+          w.newMembersThisWeek,
+          w.subscribedMembersThisWeek,
+        ]);
+      }
+    }
+    rows.add([]);
+
+    // Other Tasks
+    rows.add(['SECTION: Daily Other Tasks']);
+    rows.add(['Date', 'Task Description']);
+    for (var r in reports) {
+      if (r.otherTasks.trim().isNotEmpty) {
+        rows.add([df.format(r.date), r.otherTasks]);
+      }
+    }
+    rows.add([]);
+
+    // Summary Section (from the weekly submission itself)
+    rows.add(['SECTION: WEEKLY SUMMARY & REVIEW']);
+    rows.add([
+      'Key Tasks Completed',
+      summaryReport.keyTasksCompleted.join('; '),
+    ]);
+    rows.add(['Goals for the Week', summaryReport.goalsForTheWeek.join('; ')]);
+    rows.add([
+      'Achievements / Wins',
+      summaryReport.achievementsWins.join('; '),
+    ]);
+    rows.add([
+      'Challenges / Obstacles',
+      summaryReport.challengesObstacles.join('; '),
+    ]);
+    rows.add([
+      'Solutions / Actions Taken',
+      summaryReport.solutionsActionsTaken.join('; '),
+    ]);
+    rows.add(['Skills or Learning', summaryReport.skillsLearning.join('; ')]);
+    rows.add([
+      'Performance Rating',
+      summaryReport.performanceRating.join('; '),
+    ]);
+    rows.add(['Goals for Next Week', summaryReport.goalsNextWeek.join('; ')]);
+    rows.add(['Additional Notes', summaryReport.additionalNotes.join('; ')]);
+
+    return const ListToCsvConverter().convert(rows);
   }
 
   void _showCsvDialog(String csv, String filename) {
