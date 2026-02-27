@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:csv/csv.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/daily_report.dart';
 
 // Pill colours reused from the daily report page palette
@@ -25,13 +28,13 @@ class AdminWeeklyReportsPage extends StatefulWidget {
 class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
   // null = list view; non-null = detail view for that user
   Map<String, dynamic>? _selectedEmployee;
-  DailyReport? _weeklyReport;
-  bool _loadingReport = false;
+  List<DailyReport> _reports = [];
+  bool _loadingReports = false;
 
-  Future<void> _loadWeeklyReport(String userId) async {
+  Future<void> _loadWeeklyReports(String userId) async {
     setState(() {
-      _loadingReport = true;
-      _weeklyReport = null;
+      _loadingReports = true;
+      _reports = [];
     });
 
     try {
@@ -42,31 +45,53 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
           .doc('data')
           .collection('daily_reports')
           .where('userId', isEqualTo: userId)
+          .where('isWeeklySubmission', isEqualTo: true)
           .get();
 
-      if (snap.docs.isNotEmpty) {
-        // Filter and sort client-side to avoid composite index requirement
-        final reports =
-            snap.docs
-                .map((d) => DailyReport.fromMap(d.id, d.data()))
-                .where((r) => r.isWeeklySubmission)
-                .toList()
-              ..sort((a, b) => b.date.compareTo(a.date)); // descending date
+      final fetchedReports =
+          snap.docs.map((d) => DailyReport.fromMap(d.id, d.data())).toList()
+            ..sort((a, b) => b.date.compareTo(a.date));
 
-        if (reports.isNotEmpty) {
-          setState(() {
-            _weeklyReport = reports.first;
-          });
-        }
-      }
+      setState(() {
+        _reports = fetchedReports;
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error loading report: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error loading reports: $e')));
       }
     } finally {
-      setState(() => _loadingReport = false);
+      setState(() => _loadingReports = false);
+    }
+  }
+
+  void _downloadCSV(DailyReport report) async {
+    try {
+      final csvData = const ListToCsvConverter().convert(report.toCsvRows());
+      final fileName =
+          'Weekly_Report_${report.userName}_${DateFormat('yyyy-MM-dd').format(report.date)}.csv';
+
+      // Use url_launcher to trigger download via data URI
+      final encodedUri = Uri.dataFromString(
+        csvData,
+        mimeType: 'text/csv',
+        encoding: utf8,
+      );
+
+      if (await canLaunchUrl(encodedUri)) {
+        await launchUrl(encodedUri);
+      } else {
+        throw 'Could not launch $encodedUri';
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Downloading $fileName...')));
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error generating CSV: $e')));
     }
   }
 
@@ -85,14 +110,14 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => setState(() {
                   _selectedEmployee = null;
-                  _weeklyReport = null;
+                  _reports = [];
                 }),
               )
             : null,
       ),
       body: _selectedEmployee == null
           ? _buildEmployeeList()
-          : _buildReportDetail(),
+          : _buildReportList(),
     );
   }
 
@@ -129,7 +154,7 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
                   borderRadius: BorderRadius.circular(14),
                   onTap: () {
                     setState(() => _selectedEmployee = data);
-                    _loadWeeklyReport(data['uid'] ?? users[i].id);
+                    _loadWeeklyReports(data['uid'] ?? users[i].id);
                   },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -190,13 +215,13 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
     );
   }
 
-  // ─── Weekly report detail ──────────────────────────────────────────────────
-  Widget _buildReportDetail() {
-    if (_loadingReport) {
+  // ─── Weekly report list ──────────────────────────────────────────────────
+  Widget _buildReportList() {
+    if (_loadingReports) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_weeklyReport == null) {
+    if (_reports.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -204,7 +229,7 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
             Icon(Icons.inbox_outlined, size: 64, color: Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
-              'No weekly report submitted yet.',
+              'No weekly reports found.',
               style: TextStyle(fontSize: 16, color: Colors.grey[500]),
             ),
           ],
@@ -212,133 +237,37 @@ class _AdminWeeklyReportsPageState extends State<AdminWeeklyReportsPage> {
       );
     }
 
-    final r = _weeklyReport!;
-    final dateStr = DateFormat('EEEE, MMM d, yyyy').format(r.date);
-
-    return SingleChildScrollView(
+    return ListView.builder(
       padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Date badge
-          Center(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF7C6FCD),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                'Week ending $dateStr',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-              ),
+      itemCount: _reports.length,
+      itemBuilder: (context, i) {
+        final r = _reports[i];
+        final dateStr = DateFormat('EEEE, MMM d, yyyy').format(r.date);
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            leading: const Icon(Icons.calendar_today, color: Color(0xFF7C6FCD)),
+            title: Text(
+              'Week ending $dateStr',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: const Text('Weekly Submission'),
+            trailing: IconButton(
+              icon: const Icon(Icons.download, color: Colors.green),
+              onPressed: () => _downloadCSV(r),
+              tooltip: 'Download CSV',
             ),
           ),
-          const SizedBox(height: 24),
-
-          // Part 3 review fields
-          _reviewCard('Key Tasks Completed', r.keyTasksCompleted),
-          _reviewCard('Goals for the Week', r.goalsForTheWeek),
-          _reviewCard('Achievements / Wins', r.achievementsWins),
-          _reviewCard('Challenges / Obstacles', r.challengesObstacles),
-          _reviewCard('Solutions / Actions Taken', r.solutionsActionsTaken),
-          _reviewCard('Skills or Learning This Week', r.skillsLearning),
-          _reviewCard('Overall Performance Self-Rating', r.performanceRating),
-          _reviewCard('Goals for Next Week', r.goalsNextWeek),
-          _reviewCard('Additional Notes', r.additionalNotes),
-
-          if (r.otherTasks.trim().isNotEmpty)
-            _reviewCard('Other Tasks', [r.otherTasks]),
-        ],
-      ),
-    );
-  }
-
-  Widget _reviewCard(String title, List<String> items) {
-    final filtered = items.where((s) => s.trim().isNotEmpty).toList();
-    if (filtered.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: const Color.fromRGBO(0, 0, 0, 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 4,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF7C6FCD),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: Color(0xFF2D2D3A),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ...filtered.asMap().entries.map(
-              (e) => Padding(
-                padding: EdgeInsets.only(
-                  bottom: e.key < filtered.length - 1 ? 6 : 0,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 5),
-                      child: Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF7C6FCD),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        e.value,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF4A4A5A),
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 }

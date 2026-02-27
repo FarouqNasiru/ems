@@ -234,6 +234,98 @@ class DailyReport {
     };
   }
 
+  List<List<dynamic>> toCsvRows() {
+    final List<List<dynamic>> rows = [];
+
+    // Header
+    rows.add(['Weekly Activity Report']);
+    rows.add(['Employee', userName]);
+    rows.add(['Date', date.toIso8601String()]);
+    rows.add([]);
+
+    // Viral Mailers
+    rows.add(['SECTION: Viral Mailers']);
+    rows.add([
+      'Name',
+      'Site Name',
+      'Sent To',
+      'Clicks',
+      'CTR',
+      'Emails Clicked',
+      'Frequency',
+    ]);
+    for (var m in viralMailers) {
+      rows.add([
+        m.name,
+        m.siteName,
+        m.sentTo,
+        m.clicks,
+        m.ctr,
+        m.emailsClicked,
+        m.frequency,
+      ]);
+    }
+    rows.add([]);
+
+    // Traffic Exchanges
+    rows.add(['SECTION: Traffic Exchanges']);
+    rows.add(['Name', 'URL', 'Hits', 'Surf Count']);
+    for (var t in trafficExchanges) {
+      rows.add([t.name, t.url, t.hits, t.surfCount]);
+    }
+    rows.add([]);
+
+    // Social Media
+    rows.add(['SECTION: Social Media']);
+    rows.add(['Name', 'Post Link']);
+    for (var s in socialMedia) {
+      rows.add([s.name, s.postLink]);
+    }
+    rows.add([]);
+
+    // Tracking Links
+    rows.add(['SECTION: Tracking Links']);
+    rows.add(['URL', 'Total Hits', 'Top 3 Countries', 'Top 3 Sites']);
+    for (var l in trackingLinks) {
+      rows.add([l.url, l.totalHits, l.top3Countries, l.top3Sites]);
+    }
+    rows.add([]);
+
+    // Weekly Mailer Stats
+    rows.add(['SECTION: Weekly Mailer Stats']);
+    rows.add([
+      'Site Name',
+      'Mailed This Week',
+      'New Members',
+      'Subscribed Members',
+    ]);
+    for (var w in weeklyMailers) {
+      rows.add([
+        w.siteName,
+        w.mailedThisWeek,
+        w.newMembersThisWeek,
+        w.subscribedMembers,
+      ]);
+    }
+    rows.add([]);
+
+    // Weekly Review
+    rows.add(['SECTION: Weekly Review']);
+    rows.add(['Field', 'Content']);
+    rows.add(['Key Tasks Completed', keyTasksCompleted.join('; ')]);
+    rows.add(['Goals for the Week', goalsForTheWeek.join('; ')]);
+    rows.add(['Achievements / Wins', achievementsWins.join('; ')]);
+    rows.add(['Challenges / Obstacles', challengesObstacles.join('; ')]);
+    rows.add(['Solutions / Actions Taken', solutionsActionsTaken.join('; ')]);
+    rows.add(['Skills or Learning', skillsLearning.join('; ')]);
+    rows.add(['Performance Rating', performanceRating.join('; ')]);
+    rows.add(['Goals for Next Week', goalsNextWeek.join('; ')]);
+    rows.add(['Additional Notes', additionalNotes.join('; ')]);
+    rows.add(['Other Tasks', otherTasks]);
+
+    return rows;
+  }
+
   factory DailyReport.fromMap(String id, Map<String, dynamic> map) {
     return DailyReport(
       id: id,
