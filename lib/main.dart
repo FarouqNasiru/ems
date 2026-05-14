@@ -14,6 +14,7 @@ import 'package:fl_chart/fl_chart.dart'; // Charting Library
 
 // Services & Screens
 import 'package:ems/services/auth_service.dart';
+import 'package:ems/services/database.dart';
 import 'package:ems/screens/login_page.dart';
 import 'package:ems/screens/daily_report_page.dart';
 import 'package:ems/screens/admin_weekly_reports_page.dart';
@@ -979,13 +980,74 @@ class AdminLiveFeed extends StatelessWidget {
     );
   }
 
+  void _confirmClearHistory(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Clear History?"),
+        content: const Text(
+          "This will permanently delete all logs, screenshots, daily reports, and weekly summaries. This action cannot be undone.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                debugPrint("ADMIN: Initiating full clear for appId: $appId");
+                await DatabaseService(appId: appId).deleteAllLogs();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("History cleared successfully!")),
+                  );
+                }
+              } catch (e) {
+                debugPrint("ADMIN ERROR: $e");
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Error clearing history: $e")),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("Delete All"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return const Center(child: Text("Please log in"));
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Live Team Status")),
+      appBar: AppBar(
+        title: const Text("Live Team Status"),
+        actions: [
+          FutureBuilder<String>(
+            future: AuthService().getUserRole(),
+            builder: (context, snapshot) {
+              if (snapshot.data == 'admin') {
+                return IconButton(
+                  icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                  tooltip: "Clear History",
+                  onPressed: () => _confirmClearHistory(context),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+        ],
+      ),
       body: FutureBuilder<String>(
         future: AuthService().getUserRole(),
         builder: (context, roleSnapshot) {
