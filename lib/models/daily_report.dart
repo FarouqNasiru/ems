@@ -389,6 +389,11 @@ class DailyReport {
         ViralMailerEntry(name: 'Viral Mailer 3'),
         ViralMailerEntry(name: 'Viral Mailer 4'),
         ViralMailerEntry(name: 'Viral Mailer 5'),
+        ViralMailerEntry(name: 'Viral Mailer 6'),
+        ViralMailerEntry(name: 'Viral Mailer 7'),
+        ViralMailerEntry(name: 'Viral Mailer 8'),
+        ViralMailerEntry(name: 'Viral Mailer 9'),
+        ViralMailerEntry(name: 'Viral Mailer 10'),
       ],
       trafficExchanges: [
         TrafficExchangeEntry(name: 'Traffic Exchange 1'),
@@ -398,6 +403,9 @@ class DailyReport {
         TrafficExchangeEntry(name: 'Traffic Exchange 5'),
         TrafficExchangeEntry(name: 'Traffic Exchange 6'),
         TrafficExchangeEntry(name: 'Traffic Exchange 7'),
+        TrafficExchangeEntry(name: 'Traffic Exchange 8'),
+        TrafficExchangeEntry(name: 'Traffic Exchange 9'),
+        TrafficExchangeEntry(name: 'Traffic Exchange 10'),
       ],
       socialMedia: [
         SocialMediaEntry(name: 'Social Media 1'),
